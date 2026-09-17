@@ -1,20 +1,29 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
+import { createBoard as createBoardOnHost } from '../lib/api';
 
 /**
- * Landing page. There is no host/server yet (that lands in Phase 2), so
- * "creating" a board just generates a random id and stores it locally via
- * tldraw's own persistence. Once the host process exists, this page will
- * call `POST /api/boards` instead and boards will be shareable across
- * devices on the LAN.
+ * Landing page. Boards are created on the host (`POST /api/boards`) so they
+ * are shareable with other devices on the LAN and survive a host restart;
+ * see PLAN.md 4.2/4.5. The creator's admin secret is stored locally by
+ * `createBoardOnHost` and never shown to guests who just open the link.
  */
 export default function HomePage() {
   const navigate = useNavigate();
   const [joinId, setJoinId] = useState('');
+  const [isCreating, setIsCreating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const createBoard = () => {
-    const id = crypto.randomUUID();
-    navigate(`/board/${id}`);
+  const handleCreate = async () => {
+    setIsCreating(true);
+    setError(null);
+    try {
+      const { id } = await createBoardOnHost();
+      navigate(`/board/${id}`);
+    } catch {
+      setError('Could not reach the host. Is the server running?');
+      setIsCreating(false);
+    }
   };
 
   const joinBoard = (e: React.FormEvent) => {
@@ -33,11 +42,14 @@ export default function HomePage() {
 
         <button
           type="button"
-          onClick={createBoard}
-          className="w-full py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-violet-600 text-white font-medium mb-4 hover:opacity-90 transition-opacity"
+          onClick={handleCreate}
+          disabled={isCreating}
+          className="w-full py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-violet-600 text-white font-medium mb-4 hover:opacity-90 transition-opacity disabled:opacity-60"
         >
-          Create a new board
+          {isCreating ? 'Creating…' : 'Create a new board'}
         </button>
+
+        {error && <p className="text-sm text-red-400 mb-4">{error}</p>}
 
         <form onSubmit={joinBoard} className="flex gap-2">
           <label htmlFor="join-board-id" className="sr-only">
@@ -59,7 +71,7 @@ export default function HomePage() {
         </form>
 
         <p className="mt-6 text-xs text-slate-500">
-          Guests will join with an unguessable board token once the host server exists.
+          Anyone with the board link can join and draw — the link itself is the guest token.
         </p>
       </div>
     </div>

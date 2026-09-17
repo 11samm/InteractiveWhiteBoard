@@ -19,4 +19,18 @@ export default defineConfig({
 
   // File types to support raw imports. Never add .css, .tsx, or .ts files to this.
   assetsInclude: ['**/*.svg', '**/*.csv'],
+
+  server: {
+    proxy: {
+      // The host process (server/index.ts) serves the API and the sync
+      // websocket. In dev they run as separate processes, so Vite proxies
+      // both HTTP and the WS upgrade for /api/* to keep the browser on a
+      // single same-origin URL, matching how the host serves both in prod.
+      '/api': {
+        target: 'http://localhost:8787',
+        changeOrigin: true,
+        ws: true,
+      },
+    },
+  },
 })

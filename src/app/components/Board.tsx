@@ -1,8 +1,8 @@
-import { Tldraw, type Editor, type TLComponents } from 'tldraw';
+import { Tldraw, type Editor, type TLComponents, type TLStore } from 'tldraw';
 import 'tldraw/tldraw.css';
 
 interface BoardProps {
-  boardId: string;
+  store: TLStore;
   onMount: (editor: Editor) => void;
 }
 
@@ -30,15 +30,15 @@ const components: TLComponents = {
  * Thin wrapper around tldraw's editor.
  *
  * tldraw owns the shape model, selection, transforms, undo/redo, camera,
- * serialization, and local persistence (via `persistenceKey`, backed by
- * IndexedDB). This file is app-specific wiring: which board is loaded, how
- * our custom chrome (Toolbar/ZoomControl) talks to the editor instance, and
- * which pieces of tldraw's own UI we keep vs. hide.
+ * serialization, and (via the synced `store` passed in from `BoardPage`,
+ * see `useSync`) real-time multiplayer sync, presence, and reconnect
+ * behavior. This file is app-specific wiring: which pieces of tldraw's own
+ * UI we keep vs. hide, and how our custom chrome talks to the editor.
  */
-export function Board({ boardId, onMount }: BoardProps) {
+export function Board({ store, onMount }: BoardProps) {
   return (
     <div className="absolute inset-0">
-      <Tldraw components={components} persistenceKey={`whiteboard-${boardId}`} onMount={onMount} />
+      <Tldraw store={store} components={components} onMount={onMount} />
     </div>
   );
 }

@@ -1,53 +1,56 @@
-interface User {
+interface Collaborator {
   id: string;
   name: string;
   color: string;
-  initials: string;
 }
 
 interface UserAvatarsProps {
   theme: 'light' | 'dark';
+  collaborators: Collaborator[];
 }
 
-export function UserAvatars({ theme }: UserAvatarsProps) {
-  const users: User[] = [
-    { id: '1', name: 'Sarah Chen', color: 'bg-blue-500', initials: 'SC' },
-    { id: '2', name: 'Alex Morgan', color: 'bg-purple-500', initials: 'AM' },
-    { id: '3', name: 'Jordan Lee', color: 'bg-green-500', initials: 'JL' },
-  ];
+function initialsFor(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return '?';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
 
+/**
+ * Shows who else is currently on this board. Backed by real tldraw presence
+ * records (see `BoardPage`), not mock data — tldraw itself already renders
+ * live collaborator cursors on the canvas; this is just a compact roster.
+ */
+export function UserAvatars({ theme, collaborators }: UserAvatarsProps) {
   const canvasBackgroundColor = theme === 'dark' ? '#020617' : '#f8fafc';
+
+  if (collaborators.length === 0) return null;
 
   return (
     <div className="fixed top-6 left-6 z-40 flex items-center">
       <div className="flex -space-x-3">
-        {users.map((user, index) => (
-          <div
-            key={user.id}
-            className="relative group"
-            style={{ zIndex: users.length - index }}
-          >
+        {collaborators.map((user, index) => (
+          <div key={user.id} className="relative group" style={{ zIndex: collaborators.length - index }}>
             <div
-              className={`w-10 h-10 rounded-full ${user.color} flex items-center justify-center text-white font-medium text-sm cursor-pointer hover:scale-110 transition-transform ${
+              className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-medium text-sm cursor-default hover:scale-110 transition-transform ${
                 theme === 'dark' ? 'border-2 border-slate-900' : 'border-2 border-slate-100'
               }`}
+              style={{ backgroundColor: user.color }}
               title={user.name}
             >
-              {user.initials}
+              {initialsFor(user.name)}
             </div>
-            <div 
+            <div
               className="absolute bottom-0 right-0 w-3 h-3 bg-green-400 rounded-full"
-              style={{
-                border: `2px solid ${canvasBackgroundColor}`
-              }}
+              style={{ border: `2px solid ${canvasBackgroundColor}` }}
             />
-            
+
             {/* Tooltip */}
-            <div className={`absolute top-full mt-2 left-1/2 -translate-x-1/2 px-2 py-1 text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity ${
-              theme === 'dark' 
-                ? 'bg-slate-800 text-white' 
-                : 'bg-slate-900 text-white'
-            }`}>
+            <div
+              className={`absolute top-full mt-2 left-1/2 -translate-x-1/2 px-2 py-1 text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity ${
+                theme === 'dark' ? 'bg-slate-800 text-white' : 'bg-slate-900 text-white'
+              }`}
+            >
               {user.name}
             </div>
           </div>
