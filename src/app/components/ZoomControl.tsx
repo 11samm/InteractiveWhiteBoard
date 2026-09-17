@@ -8,9 +8,18 @@ interface ZoomControlProps {
   showGrid: boolean;
   onGridChange: (show: boolean) => void;
   editor: Editor | null;
+  /** Left offset in pixels, so we can slide over when the Study Context sidebar is open. */
+  leftOffset?: number;
 }
 
-export function ZoomControl({ theme, onThemeChange, showGrid, onGridChange, editor }: ZoomControlProps) {
+export function ZoomControl({
+  theme,
+  onThemeChange,
+  showGrid,
+  onGridChange,
+  editor,
+  leftOffset = 32,
+}: ZoomControlProps) {
   const [zoom, setZoom] = useState(100);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
@@ -33,7 +42,10 @@ export function ZoomControl({ theme, onThemeChange, showGrid, onGridChange, edit
   const handleResetZoom = () => editor?.resetZoom();
 
   return (
-    <div className="fixed bottom-8 left-8 z-50">
+    <div
+      className="fixed bottom-8 z-50 transition-[left] duration-300"
+      style={{ left: leftOffset }}
+    >
       {/* Settings dropdown */}
       {isMenuOpen && (
         <>
@@ -121,6 +133,7 @@ export function ZoomControl({ theme, onThemeChange, showGrid, onGridChange, edit
           className={`p-1.5 rounded-full transition-all ${
             theme === 'dark' ? 'text-slate-300 hover:bg-white/10 hover:text-white' : 'text-slate-600 hover:bg-slate-900/10 hover:text-slate-900'
           }`}
+          title="Zoom out"
           aria-label="Zoom out"
         >
           <Minus className="w-4 h-4" />
@@ -139,7 +152,7 @@ export function ZoomControl({ theme, onThemeChange, showGrid, onGridChange, edit
                 : 'text-slate-600 hover:bg-slate-900/10 hover:text-slate-900'
           }`}
           aria-label="Reset zoom"
-          title={`${zoom}%`}
+          title={`Reset zoom (currently ${zoom}%)`}
         >
           <Search className="w-4 h-4" />
         </button>
@@ -150,6 +163,7 @@ export function ZoomControl({ theme, onThemeChange, showGrid, onGridChange, edit
           className={`p-1.5 rounded-full transition-all ${
             theme === 'dark' ? 'text-slate-300 hover:bg-white/10 hover:text-white' : 'text-slate-600 hover:bg-slate-900/10 hover:text-slate-900'
           }`}
+          title="Zoom in"
           aria-label="Zoom in"
         >
           <Plus className="w-4 h-4" />
@@ -160,6 +174,7 @@ export function ZoomControl({ theme, onThemeChange, showGrid, onGridChange, edit
         <button
           type="button"
           onClick={() => setIsMenuOpen(!isMenuOpen)}
+          title="View settings"
           aria-label="View settings"
           aria-expanded={isMenuOpen}
           className={`p-1.5 rounded-full transition-all ${

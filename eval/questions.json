@@ -1,0 +1,18 @@
+[
+  { "question": "What are the eight axioms a vector space must satisfy?", "expectedPage": 1 },
+  { "question": "What is a subspace of a vector space?", "expectedPage": 1 },
+  { "question": "What does it mean for a set of vectors to be linearly independent?", "expectedPage": 1 },
+  { "question": "How is matrix multiplication defined for an m-by-n and n-by-p matrix?", "expectedPage": 2 },
+  { "question": "What is the transpose of a matrix?", "expectedPage": 2 },
+  { "question": "When is a square matrix invertible?", "expectedPage": 2 },
+  { "question": "How do you compute the determinant of a 2x2 matrix?", "expectedPage": 3 },
+  { "question": "What does the sign of a determinant tell you geometrically?", "expectedPage": 3 },
+  { "question": "How do you find the determinant of a triangular matrix?", "expectedPage": 3 },
+  { "question": "What is the characteristic equation used to find eigenvalues?", "expectedPage": 4 },
+  { "question": "What is an eigenspace?", "expectedPage": 4 },
+  { "question": "What does it mean for a matrix to be diagonalizable?", "expectedPage": 4 },
+  { "question": "What two properties must a linear transformation preserve?", "expectedPage": 5 },
+  { "question": "What is the rank-nullity theorem?", "expectedPage": 5 },
+  { "question": "How does composing linear transformations relate to matrix multiplication?", "expectedPage": 5 },
+  { "question": "What is the boiling point of water on Mars?", "expectedPage": null }
+]

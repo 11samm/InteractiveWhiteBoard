@@ -1,12 +1,22 @@
+import './env';
 import { randomUUID } from 'node:crypto';
+import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { serve } from '@hono/node-server';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { createNodeWebSocket } from '@hono/node-ws';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
-import { createBoard, deleteBoard, getBoard, isAdminSecretValid } from './boards';
+import { streamSSE } from 'hono/streaming';
+import { hasGeminiApiKey } from './ai/config';
+import { createBoard, deleteBoard, ensureBoard, getBoard, isAdminSecretValid } from './boards';
+import { runChatTurn } from './chat';
+import { countFiles, createFileRecord, deleteFile, getFile, listFiles, type FileRecord } from './files';
+import { ingestFile } from './ingestion';
+import { listMessages } from './messages';
 import { getOrCreateRoom, persistAllRoomsNow } from './rooms';
+import { searchChunks } from './search';
+import { getBoardUsageSummary } from './usage';
 
 const PORT = Number(process.env.PORT ?? 8787);
 const isProduction = process.env.NODE_ENV === 'production';
@@ -49,6 +59,158 @@ app.delete('/api/boards/:id', (c) => {
   }
   deleteBoard(id);
   return c.json({ ok: true });
+});
+
+// Host configuration status only — never the key itself. Lets the UI explain
+// degraded behavior (keyword-only search, no AI chat) instead of failing
+// silently when the host hasn't set GEMINI_API_KEY yet (PLAN.md 5.2).
+app.get('/api/config', (c) => c.json({ aiConfigured: hasGeminiApiKey() }));
+
+// --- Documents (PLAN.md 4.5, Phase 3) ------------------------------------
+// PDF-only for the MVP; OCR for scanned documents is explicitly deferred
+// (PLAN.md 9). Any board participant (host or guest) can upload/delete,
+// same trust level as editing the board itself — access is the board id.
+
+const MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024; // 20 MB
+const MAX_FILES_PER_BOARD = 20;
+
+function toClientFile(file: FileRecord) {
+  return {
+    id: file.id,
+    filename: file.filename,
+    mimeType: file.mimeType,
+    sizeBytes: file.sizeBytes,
+    pageCount: file.pageCount,
+    status: file.status,
+    error: file.error,
+    createdAt: file.createdAt,
+  };
+}
+
+function sanitizeFilename(name: string): string {
+  const base = name.replace(/[/\\]/g, '_').replace(/[^a-zA-Z0-9._-]/g, '_');
+  return base.slice(-150) || 'file.pdf';
+}
+
+app.get('/api/boards/:boardId/files', (c) => {
+  return c.json(listFiles(c.req.param('boardId')).map(toClientFile));
+});
+
+app.post('/api/boards/:boardId/files', async (c) => {
+  const boardId = c.req.param('boardId');
+  // Guests only ever hold a board id; register it lazily if nobody has
+  // created it through the API yet (same pattern as the sync room).
+  ensureBoard(boardId);
+
+  if (countFiles(boardId) >= MAX_FILES_PER_BOARD) {
+    return c.json({ error: 'too_many_files', message: `This board already has ${MAX_FILES_PER_BOARD} files.` }, 400);
+  }
+
+  const formData = await c.req.formData().catch(() => null);
+  const uploaded = formData?.get('file');
+  if (!(uploaded instanceof File)) {
+    return c.json({ error: 'no_file' }, 400);
+  }
+  if (uploaded.size === 0) {
+    return c.json({ error: 'empty_file' }, 400);
+  }
+  if (uploaded.size > MAX_FILE_SIZE_BYTES) {
+    return c.json({ error: 'file_too_large', message: 'Files must be 20 MB or smaller.' }, 413);
+  }
+  if (uploaded.type !== 'application/pdf') {
+    return c.json({ error: 'unsupported_type', message: 'Only PDF files are supported right now.' }, 415);
+  }
+
+  const uploadDir = path.resolve(process.cwd(), 'data', 'uploads', boardId);
+  await mkdir(uploadDir, { recursive: true });
+  const localPath = path.join(uploadDir, `${randomUUID()}-${sanitizeFilename(uploaded.name)}`);
+  await writeFile(localPath, Buffer.from(await uploaded.arrayBuffer()));
+
+  const record = createFileRecord({
+    boardId,
+    localPath,
+    filename: uploaded.name,
+    mimeType: uploaded.type,
+    sizeBytes: uploaded.size,
+  });
+
+  // Fire-and-forget: the client sees `status: "processing"` immediately and
+  // polls the files list / status endpoint for completion.
+  ingestFile(record).catch((err) => console.error('[ingestion] unhandled error:', err));
+
+  return c.json(toClientFile(record), 201);
+});
+
+app.get('/api/files/:id/status', (c) => {
+  const file = getFile(c.req.param('id'));
+  if (!file) return c.json({ error: 'not_found' }, 404);
+  return c.json(toClientFile(file));
+});
+
+app.delete('/api/files/:id', async (c) => {
+  const file = getFile(c.req.param('id'));
+  if (!file) return c.json({ error: 'not_found' }, 404);
+  await deleteFile(file.id);
+  return c.json({ ok: true });
+});
+
+// Internal debug/evaluation endpoint for retrieval (PLAN.md 7 — "Retrieval
+// and citations"). Phase 4's chat endpoint will call `searchChunks` directly
+// rather than round-tripping through HTTP.
+app.post('/api/boards/:boardId/search', async (c) => {
+  const boardId = c.req.param('boardId');
+  const body = await c.req.json().catch(() => ({}) as Record<string, unknown>);
+  const query = typeof body.query === 'string' ? body.query : '';
+  if (!query.trim()) return c.json({ error: 'missing_query' }, 400);
+  const results = await searchChunks(boardId, query, 5);
+  return c.json({
+    results: results.map((r) => ({
+      score: r.score,
+      fileId: r.chunk.fileId,
+      page: r.chunk.page,
+      text: r.chunk.text,
+    })),
+  });
+});
+
+// --- Grounded tutor chat (PLAN.md 5.2, Phase 4) --------------------------
+// One shared conversation per board. Streamed as SSE so the client can show
+// tokens as they arrive; `hono/streaming`'s `stream.onAbort` lets us cancel
+// the in-flight Gemini request the moment the client disconnects or the
+// user hits "stop".
+
+const MAX_MESSAGE_LENGTH = 4000;
+
+app.get('/api/boards/:boardId/messages', (c) => {
+  return c.json(listMessages(c.req.param('boardId')));
+});
+
+app.get('/api/boards/:boardId/usage', (c) => {
+  return c.json(getBoardUsageSummary(c.req.param('boardId')));
+});
+
+app.post('/api/boards/:boardId/chat', async (c) => {
+  const boardId = c.req.param('boardId');
+  ensureBoard(boardId);
+
+  const body = await c.req.json().catch(() => null as Record<string, unknown> | null);
+  const message = typeof body?.message === 'string' ? body.message.trim() : '';
+  const boardImage = typeof body?.boardImage === 'string' ? body.boardImage : undefined;
+
+  if (!message) return c.json({ error: 'missing_message' }, 400);
+  if (message.length > MAX_MESSAGE_LENGTH) {
+    return c.json({ error: 'message_too_long', message: `Questions must be under ${MAX_MESSAGE_LENGTH} characters.` }, 400);
+  }
+
+  return streamSSE(c, async (stream) => {
+    const controller = new AbortController();
+    stream.onAbort(() => controller.abort());
+
+    for await (const event of runChatTurn(boardId, message, boardImage, controller.signal)) {
+      if (stream.aborted) break;
+      await stream.writeSSE({ event: event.type, data: JSON.stringify(event) });
+    }
+  });
 });
 
 // --- Realtime sync ------------------------------------------------------

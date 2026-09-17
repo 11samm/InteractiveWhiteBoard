@@ -27,7 +27,7 @@ export function UserAvatars({ theme, collaborators }: UserAvatarsProps) {
   if (collaborators.length === 0) return null;
 
   return (
-    <div className="fixed top-6 left-6 z-40 flex items-center">
+    <div className="fixed top-6 left-1/2 -translate-x-1/2 z-40 flex items-center">
       <div className="flex -space-x-3">
         {collaborators.map((user, index) => (
           <div key={user.id} className="relative group" style={{ zIndex: collaborators.length - index }}>

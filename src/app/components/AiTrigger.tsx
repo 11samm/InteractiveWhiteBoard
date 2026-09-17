@@ -1,8 +1,9 @@
-import { Mic } from 'lucide-react';
+import { Sparkles } from 'lucide-react';
 import { useState } from 'react';
 
 interface AiTriggerProps {
   onAskAi?: () => void;
+  isOpen?: boolean;
 }
 
 /**
@@ -10,8 +11,11 @@ interface AiTriggerProps {
  * handled by tldraw's own native Toolbar/StylePanel (see `Board.tsx`) so
  * that keyboard shortcuts keep working; this is app-specific chrome layered
  * on top, positioned away from tldraw's own bottom-center toolbar.
+ *
+ * Opens a typed-question chat panel (`ChatPanel`) — voice is an explicit
+ * later extension per PLAN.md 5.4, so this intentionally isn't a mic button.
  */
-export function AiTrigger({ onAskAi }: AiTriggerProps) {
+export function AiTrigger({ onAskAi, isOpen }: AiTriggerProps) {
   const [isActive, setIsActive] = useState(false);
 
   const handleClick = () => {
@@ -34,10 +38,10 @@ export function AiTrigger({ onAskAi }: AiTriggerProps) {
             ? '0 0 15px rgba(0, 240, 255, 0.4), 0 0 25px rgba(0, 184, 212, 0.2)'
             : '0 0 15px rgba(0, 240, 255, 0.3), 0 0 25px rgba(112, 0, 255, 0.2)',
         }}
-        aria-label="Ask the AI tutor"
-        title="Ask the AI tutor"
+        aria-label={isOpen ? 'Close the AI tutor' : 'Ask the AI tutor'}
+        title={isOpen ? 'Close the AI tutor' : 'Ask the AI tutor'}
       >
-        <Mic className="w-5 h-5 text-white relative z-10" />
+        <Sparkles className="w-5 h-5 text-white relative z-10" />
         <div
           className="absolute inset-0 rounded-xl blur-md transition-all duration-300"
           style={{

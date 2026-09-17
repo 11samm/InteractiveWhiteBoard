@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { createBoard as createBoardOnHost } from '../lib/api';
+import { setStoredName } from '../lib/userName';
+import { NamePrompt } from '../components/NamePrompt';
 
 /**
  * Landing page. Boards are created on the host (`POST /api/boards`) so they
@@ -13,16 +15,19 @@ export default function HomePage() {
   const [joinId, setJoinId] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isNamingHost, setIsNamingHost] = useState(false);
 
-  const handleCreate = async () => {
+  const handleCreate = async (hostName: string) => {
     setIsCreating(true);
     setError(null);
     try {
       const { id } = await createBoardOnHost();
+      setStoredName(id, hostName);
       navigate(`/board/${id}`);
     } catch {
       setError('Could not reach the host. Is the server running?');
       setIsCreating(false);
+      setIsNamingHost(false);
     }
   };
 
@@ -31,6 +36,18 @@ export default function HomePage() {
     const trimmed = joinId.trim();
     if (trimmed) navigate(`/board/${trimmed}`);
   };
+
+  if (isNamingHost) {
+    return (
+      <NamePrompt
+        title="What should we call you?"
+        description="Shown to guests as the host's name on the board."
+        placeholder="Host"
+        confirmLabel={isCreating ? 'Creating…' : 'Create board'}
+        onSubmit={handleCreate}
+      />
+    );
+  }
 
   return (
     <div className="relative w-full h-screen overflow-hidden bg-slate-950 flex items-center justify-center">
@@ -42,11 +59,10 @@ export default function HomePage() {
 
         <button
           type="button"
-          onClick={handleCreate}
-          disabled={isCreating}
-          className="w-full py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-violet-600 text-white font-medium mb-4 hover:opacity-90 transition-opacity disabled:opacity-60"
+          onClick={() => setIsNamingHost(true)}
+          className="w-full py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-violet-600 text-white font-medium mb-4 hover:opacity-90 transition-opacity"
         >
-          {isCreating ? 'Creating…' : 'Create a new board'}
+          Create a new board
         </button>
 
         {error && <p className="text-sm text-red-400 mb-4">{error}</p>}

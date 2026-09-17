@@ -3,18 +3,27 @@ import { useParams } from 'react-router';
 import { useSync } from '@tldraw/sync';
 import { inlineBase64AssetStore, type Editor } from 'tldraw';
 import { AiTrigger } from '../components/AiTrigger';
+import { ChatPanel } from '../components/ChatPanel';
 import { StudyContextSidebar } from '../components/StudyContextSidebar';
 import { UserAvatars } from '../components/UserAvatars';
 import { Board } from '../components/Board';
+import { NamePrompt } from '../components/NamePrompt';
 import { ZoomControl } from '../components/ZoomControl';
 import { getSyncUrl } from '../lib/api';
+import { getStoredName, setStoredName } from '../lib/userName';
 
 export default function BoardPage() {
   const { boardId } = useParams<{ boardId: string }>();
   const [theme, setTheme] = useState<'light' | 'dark'>('dark');
   const [showGrid, setShowGrid] = useState(true);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
   const [editor, setEditor] = useState<Editor | null>(null);
   const [collaborators, setCollaborators] = useState<{ id: string; name: string; color: string }[]>([]);
+  // The host already picked a name on `HomePage` (stored per-board); guests
+  // opening a fresh link haven't, so `userName` starts `null` and we show a
+  // naming gate until it's resolved.
+  const [userName, setUserName] = useState<string | null>(() => (boardId ? getStoredName(boardId) : null));
 
   // `useSync` owns the websocket connection to the host's authoritative
   // room (server/rooms.ts): initial load, presence, conflict resolution,
@@ -32,14 +41,29 @@ export default function BoardPage() {
 
   const handleMount = useCallback(
     (mountedEditor: Editor) => {
-      mountedEditor.user.updateUserPreferences({ colorScheme: theme });
-      mountedEditor.updateInstanceState({ isGridMode: showGrid });
+      mountedEditor.user.updateUserPreferences({ colorScheme: theme, name: userName ?? undefined });
+      // Keep the active drawing tool selected after each shape instead of
+      // snapping back to "select" — better for drawing several lines/notes
+      // in a row. Users can still toggle this off via the lock icon tldraw
+      // shows next to the active tool.
+      mountedEditor.updateInstanceState({ isGridMode: showGrid, isToolLocked: true });
       setEditor(mountedEditor);
     },
     // Only the initial theme/grid values matter here; later changes are
-    // applied through the change handlers below.
+    // applied through the change handlers below. `userName` is included
+    // since it starts `null` (naming gate not resolved yet) and `<Board>`
+    // only mounts once it's set, so this must stay fresh until then.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [],
+    [userName],
+  );
+
+  const handleNameSubmit = useCallback(
+    (name: string) => {
+      if (!boardId) return;
+      setStoredName(boardId, name);
+      setUserName(name);
+    },
+    [boardId],
   );
 
   // Real presence: tldraw already renders collaborator cursors on the
@@ -73,6 +97,18 @@ export default function BoardPage() {
 
   if (!boardId) return null;
 
+  if (userName === null) {
+    return (
+      <NamePrompt
+        title="Join this board"
+        description="Your name is shown to others on the board (cursors, avatars)."
+        placeholder="Guest"
+        confirmLabel="Continue"
+        onSubmit={handleNameSubmit}
+      />
+    );
+  }
+
   if (syncedStore.status === 'loading') {
     return (
       <div className="w-full h-screen flex items-center justify-center bg-slate-950 text-slate-300">
@@ -102,23 +138,32 @@ export default function BoardPage() {
         </div>
       )}
 
-      {/* Top Left - User Avatars (top-right is reserved for tldraw's native style panel) */}
+      {/* Top Center - User Avatars (top-right is reserved for tldraw's style panel,
+          top-left/left edge is reserved for the Study Context sidebar) */}
       <UserAvatars theme={theme} collaborators={collaborators} />
 
-      {/* Bottom Left - Zoom Control */}
+      {/* Bottom Left - Zoom Control (slides right when the Study Context sidebar is open) */}
       <ZoomControl
         theme={theme}
         onThemeChange={handleThemeChange}
         showGrid={showGrid}
         onGridChange={handleGridChange}
         editor={editor}
+        leftOffset={sidebarCollapsed ? 32 : 352}
       />
 
       {/* Bottom Right - Ask AI (tldraw's own toolbar owns bottom-center) */}
-      <AiTrigger />
+      <AiTrigger onAskAi={() => setChatOpen((v) => !v)} isOpen={chatOpen} />
+      {chatOpen && <ChatPanel boardId={boardId} editor={editor} theme={theme} onClose={() => setChatOpen(false)} />}
 
-      {/* Right Sidebar - Study Context */}
-      <StudyContextSidebar theme={theme} />
+      {/* Left Sidebar - Study Context (kept off the right edge, which tldraw's
+          style panel uses) */}
+      <StudyContextSidebar
+        theme={theme}
+        isCollapsed={sidebarCollapsed}
+        onCollapsedChange={setSidebarCollapsed}
+        boardId={boardId}
+      />
     </div>
   );
 }

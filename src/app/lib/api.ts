@@ -57,3 +57,176 @@ export function getSyncUrl(boardId: string): string {
   const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
   return `${protocol}://${window.location.host}/api/sync/${encodeURIComponent(boardId)}`;
 }
+
+// --- Host configuration status --------------------------------------------
+
+export async function getConfigStatus(): Promise<{ aiConfigured: boolean }> {
+  const res = await fetch('/api/config');
+  if (!res.ok) return { aiConfigured: false };
+  return (await res.json()) as { aiConfigured: boolean };
+}
+
+// --- Documents (Phase 3) ---------------------------------------------------
+
+export type FileStatus = 'processing' | 'ready' | 'error';
+
+export interface FileSummary {
+  id: string;
+  filename: string;
+  mimeType: string;
+  sizeBytes: number;
+  pageCount: number | null;
+  status: FileStatus;
+  error: string | null;
+  createdAt: string;
+}
+
+export class UploadError extends Error {
+  constructor(
+    message: string,
+    public readonly code: string,
+  ) {
+    super(message);
+  }
+}
+
+export async function listBoardFiles(boardId: string): Promise<FileSummary[]> {
+  const res = await fetch(`/api/boards/${encodeURIComponent(boardId)}/files`);
+  if (!res.ok) throw new Error(`Failed to list files (${res.status})`);
+  return (await res.json()) as FileSummary[];
+}
+
+export async function uploadBoardFile(boardId: string, file: File): Promise<FileSummary> {
+  const body = new FormData();
+  body.append('file', file);
+  const res = await fetch(`/api/boards/${encodeURIComponent(boardId)}/files`, { method: 'POST', body });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}) as { error?: string; message?: string });
+    throw new UploadError(data.message ?? `Upload failed (${res.status})`, data.error ?? 'unknown');
+  }
+  return (await res.json()) as FileSummary;
+}
+
+export async function deleteBoardFile(fileId: string): Promise<void> {
+  const res = await fetch(`/api/files/${encodeURIComponent(fileId)}`, { method: 'DELETE' });
+  if (!res.ok) throw new Error(`Failed to delete file (${res.status})`);
+}
+
+// --- Grounded tutor chat (Phase 4) ------------------------------------------
+
+export type MessageRole = 'user' | 'assistant' | 'error';
+
+export interface CitationDto {
+  id: string;
+  chunkId: string | null;
+  fileId: string | null;
+  filename: string;
+  page: number;
+  excerpt: string;
+  retrievalScore: number;
+}
+
+export interface MessageDto {
+  id: string;
+  role: MessageRole;
+  content: string;
+  createdAt: string;
+  citations: CitationDto[];
+}
+
+export interface UsageDto {
+  promptTokens: number;
+  completionTokens: number;
+  latencyMs: number;
+  estimatedCostUsd: number;
+}
+
+export interface UsageSummaryDto {
+  requestCount: number;
+  totalPromptTokens: number;
+  totalCompletionTokens: number;
+  totalEstimatedCostUsd: number;
+  avgLatencyMs: number;
+}
+
+export async function getBoardMessages(boardId: string): Promise<MessageDto[]> {
+  const res = await fetch(`/api/boards/${encodeURIComponent(boardId)}/messages`);
+  if (!res.ok) throw new Error(`Failed to load messages (${res.status})`);
+  return (await res.json()) as MessageDto[];
+}
+
+export async function getBoardUsage(boardId: string): Promise<UsageSummaryDto> {
+  const res = await fetch(`/api/boards/${encodeURIComponent(boardId)}/usage`);
+  if (!res.ok) throw new Error(`Failed to load usage (${res.status})`);
+  return (await res.json()) as UsageSummaryDto;
+}
+
+interface ChatStreamHandlers {
+  onToken: (text: string) => void;
+  onDone: (payload: { messageId: string; citations: CitationDto[]; usage: UsageDto }) => void;
+  onError: (payload: { code: string; message: string }) => void;
+}
+
+/**
+ * Posts a chat turn and reads the server's SSE stream by hand (native
+ * `EventSource` can't send a POST body). Each event is a JSON line already
+ * shaped like our `onToken`/`onDone`/`onError` handlers.
+ */
+export async function sendChatMessage(
+  boardId: string,
+  message: string,
+  boardImage: string | undefined,
+  handlers: ChatStreamHandlers,
+  signal: AbortSignal,
+): Promise<void> {
+  let res: Response;
+  try {
+    res = await fetch(`/api/boards/${encodeURIComponent(boardId)}/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message, boardImage }),
+      signal,
+    });
+  } catch {
+    if (signal.aborted) return;
+    handlers.onError({ code: 'network_error', message: 'Could not reach the host.' });
+    return;
+  }
+
+  if (!res.ok || !res.body) {
+    const data = await res.json().catch(() => ({}) as { error?: string; message?: string });
+    handlers.onError({ code: data.error ?? 'request_failed', message: data.message ?? 'Request failed.' });
+    return;
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+
+    let boundary: number;
+    while ((boundary = buffer.indexOf('\n\n')) !== -1) {
+      const rawEvent = buffer.slice(0, boundary);
+      buffer = buffer.slice(boundary + 2);
+      const dataLine = rawEvent
+        .split('\n')
+        .filter((line) => line.startsWith('data:'))
+        .map((line) => line.slice(5).trim())
+        .join('');
+      if (!dataLine) continue;
+
+      const payload = JSON.parse(dataLine) as
+        | { type: 'token'; text: string }
+        | { type: 'done'; messageId: string; citations: CitationDto[]; usage: UsageDto }
+        | { type: 'error'; code: string; message: string };
+
+      if (payload.type === 'token') handlers.onToken(payload.text);
+      else if (payload.type === 'done') handlers.onDone(payload);
+      else if (payload.type === 'error') handlers.onError(payload);
+    }
+  }
+}
