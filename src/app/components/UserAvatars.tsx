@@ -19,7 +19,7 @@ export function UserAvatars({ theme }: UserAvatarsProps) {
   const canvasBackgroundColor = theme === 'dark' ? '#020617' : '#f8fafc';
 
   return (
-    <div className="fixed top-6 right-6 z-40 flex items-center">
+    <div className="fixed top-6 left-6 z-40 flex items-center">
       <div className="flex -space-x-3">
         {users.map((user, index) => (
           <div
