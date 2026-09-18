@@ -11,6 +11,7 @@
     "build": "npm run typecheck && vite build",
     "start": "tsx server/index.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.server.json",
+    "test:annotations": "tsx --test shared/annotationSchema.test.ts shared/annotationGeometry.test.ts",
     "eval:retrieval": "tsx scripts/evaluate-retrieval.ts"
   },
   "dependencies": {

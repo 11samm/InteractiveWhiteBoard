@@ -8,16 +8,19 @@ import { createNodeWebSocket } from '@hono/node-ws';
 import { Hono, type Context } from 'hono';
 import { cors } from 'hono/cors';
 import { streamSSE } from 'hono/streaming';
-import { hasGeminiApiKey } from './ai/config';
+import { anchorPdfTakeawayArrows, parseAnnotationPlan } from '../shared/annotationSchema';
+import { CHAT_BUDGET_USD_PER_BOARD, GEMINI_CHAT_MODEL, estimateCostUsd, hasGeminiApiKey } from './ai/config';
+import { AnnotationSourceUnavailableError, generateAnnotations } from './ai/annotations';
 import { createBoard, deleteBoard, ensureBoard, getBoard, isAdminSecretValid } from './boards';
 import { runChatTurn } from './chat';
 import { countFiles, createFileRecord, deleteFile, getFile, listFiles, type FileRecord } from './files';
 import { ingestFile } from './ingestion';
 import { listMessages } from './messages';
 import { getOrCreateRoom, persistAllRoomsNow } from './rooms';
+import { checkChatRateLimit } from './rateLimit';
 import { searchChunks } from './search';
 import { getPrimaryLanIPv4 } from './lan';
-import { getBoardUsageSummary } from './usage';
+import { getBoardSpendUsd, getBoardUsageSummary, recordUsage } from './usage';
 
 const PORT = Number(process.env.PORT ?? 8787);
 const isProduction = process.env.NODE_ENV === 'production';
@@ -221,6 +224,57 @@ app.post('/api/boards/:boardId/chat', async (c) => {
       await stream.writeSSE({ event: event.type, data: JSON.stringify(event) });
     }
   });
+});
+
+// Model output is a bounded proposal. The requesting browser applies it to
+// tldraw only after review; tldraw then syncs the shapes to every participant.
+app.post('/api/boards/:boardId/annotations', async (c) => {
+  const boardId = c.req.param('boardId');
+  ensureBoard(boardId);
+  const body = await c.req.json().catch(() => null as Record<string, unknown> | null);
+  const instruction = typeof body?.instruction === 'string' ? body.instruction.trim() : '';
+  const boardImage = typeof body?.boardImage === 'string' ? body.boardImage : undefined;
+  if (!instruction || instruction.length > 600) {
+    return c.json({ error: 'invalid_instruction', message: 'Describe what to add in 600 characters or fewer.' }, 400);
+  }
+  if (boardImage && boardImage.length > 8_000_000) {
+    return c.json({ error: 'board_image_too_large', message: 'Board snapshot is too large to send.' }, 413);
+  }
+  if (!hasGeminiApiKey()) {
+    return c.json({ error: 'no_api_key', message: 'The host has not configured an AI provider key yet.' }, 503);
+  }
+  const rateLimit = checkChatRateLimit(boardId);
+  if (!rateLimit.ok) {
+    return c.json({ error: 'rate_limited', message: `Too many AI requests. Try again in about ${Math.ceil(rateLimit.retryAfterMs / 1000)}s.` }, 429);
+  }
+  if (getBoardSpendUsd(boardId) >= CHAT_BUDGET_USD_PER_BOARD) {
+    return c.json({ error: 'budget_exceeded', message: 'This board has reached its AI usage budget.' }, 429);
+  }
+
+  const startedAt = Date.now();
+  try {
+    const result = await generateAnnotations(boardId, instruction, boardImage, c.req.raw.signal);
+    recordUsage({
+      boardId,
+      messageId: null,
+      model: GEMINI_CHAT_MODEL,
+      promptTokens: result.promptTokens,
+      completionTokens: result.completionTokens,
+      latencyMs: Date.now() - startedAt,
+      estimatedCostUsd: estimateCostUsd(result.promptTokens, result.completionTokens),
+    });
+    const actions = parseAnnotationPlan(JSON.parse(result.responseText) as unknown);
+    return c.json({ actions: anchorPdfTakeawayArrows(actions, instruction) });
+  } catch (err) {
+    if (err instanceof AnnotationSourceUnavailableError) {
+      return c.json({ error: 'source_unavailable', message: err.message }, 409);
+    }
+    const reason = err instanceof SyntaxError ? 'invalid_json'
+      : err instanceof Error && err.message.startsWith('Invalid annotation') ? 'invalid_action'
+        : 'provider_error';
+    console.error(`[annotations] board ${boardId} failed: ${reason}`);
+    return c.json({ error: 'model_failed', message: 'Could not generate board annotations. Please try again.' }, 502);
+  }
 });
 
 // --- Realtime sync ------------------------------------------------------

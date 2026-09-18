@@ -1,10 +1,10 @@
 # Handoff — Interactive Whiteboard
 
-**Date:** 2026-09-17  
+**Date:** 2026-09-18
 **Repo:** https://github.com/11samm/InteractiveWhiteBoard  
-**Starting commit for this follow-up:** `c220a44` (`HandOffDocumentation`)
+**Starting commit for this follow-up:** `6133103` (`Enable LAN guest joining and add automatic build checks`)
 
-**Current work:** LAN join changes and CI are in the working tree; check `git status` before switching machines.
+**Current work:** Phase 6 AI annotation changes are in the working tree; check `git status` before switching machines.
 
 This is a resume/portfolio project: a LAN-collaborative study whiteboard. Students draw together, upload course PDFs, and ask a host-funded AI tutor about both the live board and the documents. The product vision, phases, and out-of-scope list live in [`PLAN.md`](PLAN.md).
 
@@ -22,10 +22,10 @@ This is a resume/portfolio project: a LAN-collaborative study whiteboard. Studen
 | 5 items 1–3 | Host dashboard, reliability checklist, measurements | Done (localhost two-tab) |
 | 5 LAN join + CI | Dev LAN bind, URL parsing, local LAN smoke check, GitHub Actions | Implemented; user confirmed the guest link works on a second device |
 | **5 remaining** | **Full two-device demo, README, narrated clip, remaining reliability checks** | **Next work** |
-| 6 | AI board annotations | Explicitly deferred — do not start before Phase 5 is recruiter-ready |
+| 6 | AI board annotations | In progress; required before the owner shares the project |
 | 7 | Voice, OCR, public hosting, extra providers | Out of scope for the portfolio release |
 
-The dashboard's LAN-IP link has opened successfully on a second physical device. `npm run dev` binds Vite and the API host to `0.0.0.0`. The next priority is to document the complete two-device workflow and finish the recruiting package.
+The dashboard's LAN-IP link has opened successfully on a second physical device. `npm run dev` binds Vite and the API host to `0.0.0.0`. The owner wants AI board annotations working before sharing the project; finish and verify Phase 6, then complete the demo and recruiting package.
 
 ---
 
@@ -141,6 +141,8 @@ Persistence:
 | `src/app/routes/HostSetupPage.tsx` | Creator dashboard: LAN join URL, AI status, usage |
 | `src/app/components/Board.tsx` | tldraw wrapper; hides colliding chrome |
 | `src/app/components/ChatPanel.tsx` | SSE tutor, markdown, citations, board PNG snapshot |
+| `src/app/components/AnnotationComposer.tsx` | Annotation prompt, review, apply/discard |
+| `src/app/annotations.ts` | Capture selection/board bounds and apply one undoable tldraw batch |
 | `src/app/components/StudyContextSidebar.tsx` | PDF upload, shared processing poll, delete |
 | `src/app/lib/api.ts` | REST + SSE client, admin secret storage, `buildGuestJoinOrigin` |
 | `src/app/tldraw/CustomEraserTool.ts` | Size-aware eraser |
@@ -154,6 +156,8 @@ Persistence:
 | `server/db.ts` | SQLite schema |
 | `server/chat.ts` | One grounded turn: limits → retrieve → stream → store |
 | `server/ai/chat.ts` | Gemini stream + tutoring system prompt |
+| `server/ai/annotations.ts` | Gemini JSON proposal over board image and retrieved passages |
+| `shared/annotationSchema.ts` | Strict action validation for note, text, arrow, highlight |
 | `server/ai/config.ts` | Models, costs, rate/budget env knobs |
 | `server/ai/embeddings.ts` | Batch embed; null → keyword fallback |
 | `server/ingestion.ts` | pdf-parse → chunk → embed; scanned PDF = clear error |
@@ -204,12 +208,24 @@ Local smoke check on 2026-09-17: Vite advertised `http://192.168.10.132:5173/`. 
 
 The user subsequently opened the copied dashboard link on a second physical device and reported that it worked. The device/browser and two-way edits, presence, and reconnect steps were not separately recorded; capture those with the final demo. Plain HTTP is expected for this LAN demo; voice remains deferred.
 
+### P0.5 — Finish synchronized AI annotations
+
+The new **Annotate board** tab proposes up to four notes, text labels, arrows, or highlights. The server validates model JSON; the requester reviews the proposal before applying it to the synced tldraw store. AI-authored shapes carry metadata; notes, text, and arrow labels use a star marker, while highlights have no overlay label. Notes now use wider small-type boxes with alternating colors; highlights use a low-opacity yellow fill. The implementation passes type checking, build, and annotation-schema tests. The no-key API path returned `no_api_key` (HTTP 503), and a live provider request returned one valid 106-character note. The owner generated a note and highlight and reported visual problems in a screenshot; the style changes above address those in code but have not yet been visually verified.
+
+A mobile test of “add some literary theory notes from the pdf then draw a dotted arrow to the most important part” returned an empty proposal. The model prompt now directs partial fulfillment, PDF overview retrieval, and arrows to newly created notes when the PDF is not visible on the board. Arrow actions accept a validated dotted style, and missing PDF passages produce a specific error. A read-only live API proposal on a board with a ready literary theory PDF returned two notes and one dotted arrow (HTTP 200), with no board mutation. The revised behavior still needs a mobile UI check.
+
+A later mobile request for notes from the Apple PDF failed with a generic generation error. Reproduction with the supplied screenshot as image context showed the provider cutting JSON off mid-object under the 1,600 output-token limit. The annotation limit is now 4,096 and PDF-grounded proposals retry once without the board image if the image response is invalid. A read-only live API request with the same prompt and screenshot returned two notes and one dotted arrow (HTTP 200); the user still needs to verify the restarted host and mobile UI.
+
+The owner then showed the dotted arrow pointing from a generated “Key Topics” note into empty space. New PDF takeaway plans now identify the first note as one central takeaway, and the server anchors the arrow to that note. The client creates notes before arrows, reverses a misplaced tail when needed, and binds the arrow tip to the note so moving the note keeps the arrow attached. Geometry and schema tests cover the reversed-arrow case; visual verification on the board is pending.
+
+Still required: visually check the revised note and highlight on the board, confirm both devices see the same shapes, and verify one Undo removes the batch while leaving earlier edits intact. Record the device, browser, prompt, shapes, sync, and undo result. Do not label Phase 6 complete until these checks pass.
+
 ### P1 — Finish Phase 5 recruiting package
 
-Only after LAN join works (or is honestly documented as blocked by AP isolation):
+After the AI annotation workflow is verified:
 
 1. Replace `README.md` with: one-sentence product, demo, three capabilities, architecture, measured results, local setup, trust model, limitations, tldraw attribution. Lead with evidence, not the roadmap.
-2. GitHub Actions for `npm run typecheck` and `npm run build` is added in `.github/workflows/ci.yml`; check the first remote run after pushing. Retrieval eval is omitted because CI has no provider key.
+2. GitHub Actions runs type checking, annotation-schema tests, and build in `.github/workflows/ci.yml`; check the first remote run after pushing. Retrieval eval is omitted because CI has no provider key.
 3. Record a 60–90s narrated demo: two devices, PDF upload, grounded answer with a page citation.
 4. Fill remaining reliability rows if easy: R4 (true WS drop), oversized PDF, one-page scanned PDF. Do not invent Pass/Fail.
 
@@ -223,7 +239,6 @@ Only after LAN join works (or is honestly documented as blocked by AP isolation)
 
 ### Do not do yet
 
-- Phase 6 AI notes/arrows/highlights
 - Voice
 - OCR
 - Extra model providers
@@ -267,6 +282,7 @@ POST   /api/boards/:id/search   debug/eval
 GET    /api/boards/:id/messages
 GET    /api/boards/:id/usage    (admin)
 POST   /api/boards/:id/chat     SSE: token | done | error
+POST   /api/boards/:id/annotations  JSON proposal; client reviews and applies
 WS     /api/sync/:boardId
 GET    /api/health
 ```
@@ -277,9 +293,9 @@ GET    /api/health
 
 Paste this:
 
-> Read HANDOFF.md and PLAN.md. We are at Phase 5. The LAN bind, join URL parsing, and CI are implemented; the user confirmed that the copied dashboard link works on a second device. Next, document the full two-device workflow, replace the README, and record the narrated demo. Do not start Phase 6 or claim unrecorded reliability checks passed.
+> Read HANDOFF.md and PLAN.md. LAN joining and CI are complete. The owner wants synchronized AI annotations before sharing this project. Phase 6 code is in progress: a separate annotation endpoint proposes bounded shapes, the browser reviews them, and tldraw applies them to the shared board. Validate with a real provider key and two devices, including one-step undo. Then finish the README and narrated demo. Do not claim unrecorded reliability checks passed.
 
-Finish the Phase 5 package and record the full two-device demo.
+Finish and verify Phase 6, then record the full two-device demo and Phase 5 package.
 
 ---
 

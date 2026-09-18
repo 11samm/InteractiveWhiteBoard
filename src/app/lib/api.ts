@@ -1,3 +1,5 @@
+import { parseAnnotationPlan, type AnnotationAction } from '../../../shared/annotationSchema';
+
 export interface CreateBoardResponse {
   id: string;
   adminSecret: string;
@@ -180,6 +182,23 @@ export async function getBoardUsage(boardId: string): Promise<UsageSummaryDto> {
   if (res.status === 403) throw new Error('forbidden');
   if (!res.ok) throw new Error(`Failed to load usage (${res.status})`);
   return (await res.json()) as UsageSummaryDto;
+}
+
+export async function requestAnnotations(
+  boardId: string,
+  instruction: string,
+  boardImage: string | undefined,
+  signal: AbortSignal,
+): Promise<AnnotationAction[]> {
+  const res = await fetch(`/api/boards/${encodeURIComponent(boardId)}/annotations`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ instruction, boardImage }),
+    signal,
+  });
+  const data = await res.json().catch(() => ({})) as { actions?: unknown; message?: string };
+  if (!res.ok) throw new Error(data.message ?? 'Could not generate annotations.');
+  return parseAnnotationPlan({ actions: data.actions });
 }
 
 export function listKnownAdminBoardIds(): string[] {

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { X, Send, BookOpen, Image as ImageIcon, Square, AlertCircle } from 'lucide-react';
 import Markdown from 'react-markdown';
 import type { Editor } from 'tldraw';
+import { AnnotationComposer } from './AnnotationComposer';
 import {
   getBoardMessages,
   sendChatMessage,
@@ -58,6 +59,7 @@ export function ChatPanel({ boardId, editor, theme, onClose }: ChatPanelProps) {
   const [input, setInput] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [includeBoard, setIncludeBoard] = useState(true);
+  const [mode, setMode] = useState<'chat' | 'annotate'>('chat');
   const abortRef = useRef<AbortController | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -156,6 +158,20 @@ export function ChatPanel({ boardId, editor, theme, onClose }: ChatPanelProps) {
         </button>
       </div>
 
+      <div className={`flex gap-2 px-4 py-2 border-b ${isDark ? 'border-slate-800' : 'border-slate-200'}`}>
+        <button type="button" onClick={() => setMode('chat')} aria-pressed={mode === 'chat'} className={`rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-cyan-500 ${mode === 'chat' ? 'bg-cyan-500/20 text-cyan-400' : 'opacity-70'}`}>
+          Chat
+        </button>
+        <button type="button" onClick={() => setMode('annotate')} aria-pressed={mode === 'annotate'} className={`rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-cyan-500 ${mode === 'annotate' ? 'bg-violet-500/20 text-violet-400' : 'opacity-70'}`}>
+          Annotate board
+        </button>
+      </div>
+
+      {mode === 'annotate' ? (
+        <AnnotationComposer boardId={boardId} editor={editor} theme={theme} />
+      ) : (
+        <>
+
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
         {messages.length === 0 && (
           <p className={`text-sm ${isDark ? 'text-slate-500' : 'text-slate-500'}`}>
@@ -223,6 +239,8 @@ export function ChatPanel({ boardId, editor, theme, onClose }: ChatPanelProps) {
           </button>
         )}
       </div>
+        </>
+      )}
     </div>
   );
 }

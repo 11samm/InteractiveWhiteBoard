@@ -20,13 +20,12 @@ GlowProtocol demonstrates native iOS development and InterviewPilot demonstrates
 
 The project is ready for applications when this workflow succeeds reliably:
 
-> Two browsers join one board and edit concurrently. Either participant uploads a PDF. After a restart or reconnect, the board and file remain available. A participant asks a typed question about the drawing and document, and the tutor streams an answer with a valid page citation.
+> Two browsers join one board and edit concurrently. Either participant uploads a PDF. After a restart or reconnect, the board and file remain available. A participant asks a typed question about the drawing and document, and the tutor streams an answer with a valid page citation. The tutor can also propose notes, arrows, and highlights; a participant applies them to the shared board and removes the full set with one undo.
 
 Record the final demo using two physical devices on the same network. Use two browser windows on one machine for development and repeatable testing.
 
 These features are extensions and do not block applications:
 
-- AI-created notes, arrows, and highlights
 - Voice conversation
 - OCR for scanned documents
 - Public cloud hosting
@@ -39,7 +38,9 @@ Phases 0–4 are implemented. The app has a tldraw board, authoritative WebSocke
 
 Phase 5 is in progress. The dev client and API now listen on the LAN. A same-machine request to the LAN IPv4 verified page loading, API proxying, board creation, and the sync WebSocket upgrade. The user also confirmed that the host dashboard's guest link opened and worked on a second physical device. The full two-device demo, README, narrated clip, and remaining reliability checks are still pending.
 
-Keep the dark, floating visual identity and address accessibility or structural debt when touching related components. Do not begin Phase 6 before the Phase 5 demonstration and recruiting package are complete.
+Phase 6 implementation is in progress. The annotation proposal, validation, review, and shape application path has been added. The owner generated annotations on the board. After visual feedback, notes were made wider with smaller type and alternating colors, and highlights were changed to translucent yellow without overlay text. A live provider request using an uploaded literary theory PDF and the owner's multi-step mobile prompt returned two notes and a dotted arrow. The revised rendering, two-device sync, and one-step undo still need manual verification. The owner wants this capability complete before sharing the project.
+
+Keep the dark, floating visual identity and address accessibility or structural debt when touching related components.
 
 ## 4. Architecture
 
@@ -289,7 +290,7 @@ Done when:
 - Expected failures produce useful user-facing states.
 - The host can inspect measured latency and usage for a demo session.
 
-At the end of this phase, the project is resume-ready.
+The grounded tutor is complete; synchronized AI board annotations are part of the current release target.
 
 ### Phase 5 — Reliability and recruiting package (3–5 days)
 
@@ -306,7 +307,7 @@ Done when:
 - A developer can reproduce the two-client workflow from the README.
 - Every resume claim is supported by code, tests, measurements, or user evidence.
 
-Start or continue applications no later than this phase. Do not wait for extensions.
+Finish the AI annotation workflow in Phase 6 before sharing this project, per the owner's release target.
 
 ### Phase 6 — Synchronized AI annotations (about 1 week)
 
