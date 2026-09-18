@@ -8,7 +8,7 @@ This repository is a portfolio system around [tldraw](https://tldraw.dev). **tld
 
 ---
 
-> **For AI agents starting here:** read this file first, then [`PLAN.md`](PLAN.md) for the original roadmap and [`HANDOFF.md`](HANDOFF.md) for machine-specific notes. Do not present tldraw’s editor or sync as original work. Do not invent latency, retrieval, or reliability numbers — cite [`docs/evaluation.md`](docs/evaluation.md) and [`docs/reliability.md`](docs/reliability.md). Never commit `.env`, `data/`, or `node_modules`. Provider keys stay on the host.
+> **For AI agents starting here:** this README is the source of truth. Do not present tldraw’s editor or sync as original work. Do not invent latency, retrieval, or reliability numbers — cite [`docs/evaluation.md`](docs/evaluation.md) and [`docs/reliability.md`](docs/reliability.md). Never commit `.env`, `data/`, `PLAN.md`, `HANDOFF.md`, or `node_modules`. Provider keys stay on the host.
 
 ---
 
@@ -374,8 +374,6 @@ shared/                  Annotation schema + geometry (client + server)
 eval/                    Retrieval fixture + questions
 scripts/                 Eval runner, fixture generator
 docs/                    Measured evaluation and reliability notes
-PLAN.md                  Product vision and original phase plan
-HANDOFF.md               Machine/session continuation (secrets, Node, leftovers)
 ```
 
 | File | Role |
@@ -429,7 +427,7 @@ GET    /api/health
 4. **Do not rebuild tldraw.** Custom tools/chrome only when the native control collides or lacks a needed affordance (eraser size is the existing example).
 5. **Annotation actions stay bounded.** No arbitrary editor commands, no delete-all, no executing model-supplied code.
 6. **Do not invent metrics.** If you change chunking, embeddings, or chat, re-run eval and update `docs/` with method and sample size.
-7. **Do not implement** voice, OCR, extra providers, public cloud hosting, or a visual redesign unless the owner asks. Those are Phase 7 / out of scope in [`PLAN.md`](PLAN.md).
+7. **Do not implement** voice, OCR, extra providers, public cloud hosting, or a visual redesign unless the owner asks.
 8. **Keep docs truthful.** If behavior is unverified on two devices, say so.
 
 UI: match existing dark floating surfaces. Primary buttons stay cyan→violet. Interactive controls need visible focus rings.
@@ -459,4 +457,4 @@ UI origin: Figma Make dark-mode whiteboard mock, then rebuilt around tldraw + a 
 - **shadcn/ui** — MIT.
 - **Gemini** — host-configured API; not bundled.
 
-This is a personal portfolio project, not a hosted multi-tenant product. No billing, accounts, LMS, or global regions — see PLAN.md §10.
+This is a personal portfolio project, not a hosted multi-tenant product. Out of scope: billing, accounts, LMS integrations, native mobile clients, and global multi-region hosting.
