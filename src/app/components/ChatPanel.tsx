@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { X, Send, BookOpen, Image as ImageIcon, Square, AlertCircle } from 'lucide-react';
+import Markdown from 'react-markdown';
 import type { Editor } from 'tldraw';
 import {
   getBoardMessages,
@@ -132,7 +133,7 @@ export function ChatPanel({ boardId, editor, theme, onClose }: ChatPanelProps) {
 
   return (
     <div
-      className={`fixed bottom-24 right-8 z-50 w-96 max-w-[calc(100vw-4rem)] h-[32rem] max-h-[70vh] rounded-2xl shadow-2xl border flex flex-col overflow-hidden ${
+      className={`fixed bottom-24 right-8 z-50 w-[32rem] max-w-[calc(100vw-4rem)] h-[36rem] max-h-[80vh] rounded-2xl shadow-2xl border flex flex-col overflow-hidden ${
         isDark ? 'bg-slate-900/95 border-slate-700 text-slate-100' : 'bg-white/95 border-slate-300 text-slate-900'
       }`}
     >
@@ -228,15 +229,21 @@ function MessageBubble({ message, isDark }: { message: DisplayMessage; isDark: b
   return (
     <div className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
       <div
-        className={`max-w-[85%] rounded-xl px-3 py-2 text-sm whitespace-pre-wrap ${
+        className={`rounded-xl px-3 py-2 text-sm break-words ${
           isUser
-            ? 'bg-gradient-to-r from-cyan-500 to-violet-600 text-white'
+            ? 'max-w-[85%] whitespace-pre-wrap bg-gradient-to-r from-cyan-500 to-violet-600 text-white'
             : isDark
-              ? 'bg-slate-800 text-slate-100'
-              : 'bg-slate-100 text-slate-900'
+              ? 'w-full max-w-full bg-slate-800 text-slate-100'
+              : 'w-full max-w-full bg-slate-100 text-slate-900'
         }`}
       >
-        {message.content || (message.pending ? '…' : '')}
+        {isUser ? (
+          message.content
+        ) : message.content ? (
+          <AssistantMarkdown content={message.content} isDark={isDark} />
+        ) : message.pending ? (
+          '…'
+        ) : null}
         {message.citations.length > 0 && (
           <div className={`mt-2 pt-2 border-t space-y-1 ${isDark ? 'border-white/10' : 'border-black/10'}`}>
             {message.citations.map((c) => (
@@ -245,12 +252,54 @@ function MessageBubble({ message, isDark }: { message: DisplayMessage; isDark: b
                   <BookOpen className="w-3 h-3" />
                   {c.filename} · p.{c.page}
                 </summary>
-                <p className="mt-1 pl-4 opacity-80">{c.excerpt}</p>
+                <p className="mt-1 pl-4 opacity-80 whitespace-pre-wrap">{c.excerpt}</p>
               </details>
             ))}
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+function AssistantMarkdown({ content, isDark }: { content: string; isDark: boolean }) {
+  const muted = isDark ? 'border-slate-500 text-slate-300' : 'border-slate-300 text-slate-600';
+  const codeBg = isDark ? 'bg-black/30' : 'bg-black/10';
+  return (
+    <div className="leading-relaxed">
+      <Markdown
+        components={{
+          p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
+          strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
+          em: ({ children }) => <em className="italic">{children}</em>,
+          ul: ({ children }) => <ul className="list-disc pl-4 mb-2 space-y-1 last:mb-0">{children}</ul>,
+          ol: ({ children }) => <ol className="list-decimal pl-4 mb-2 space-y-1 last:mb-0">{children}</ol>,
+          li: ({ children }) => <li className="leading-snug">{children}</li>,
+          h1: ({ children }) => <h1 className="text-base font-semibold mb-2">{children}</h1>,
+          h2: ({ children }) => <h2 className="text-sm font-semibold mb-1.5">{children}</h2>,
+          h3: ({ children }) => <h3 className="text-sm font-semibold mb-1">{children}</h3>,
+          blockquote: ({ children }) => (
+            <blockquote className={`border-l-2 pl-3 my-2 ${muted}`}>{children}</blockquote>
+          ),
+          pre: ({ children }) => (
+            <pre className={`my-2 overflow-x-auto rounded-md px-2 py-1.5 text-xs ${codeBg}`}>{children}</pre>
+          ),
+          code: ({ children, className }) =>
+            className ? (
+              <code className="font-mono text-xs">{children}</code>
+            ) : (
+              <code className={`rounded px-1 py-0.5 font-mono text-xs ${codeBg}`}>{children}</code>
+            ),
+          a: ({ href, children }) => (
+            <a href={href} target="_blank" rel="noreferrer" className="underline text-cyan-400">
+              {children}
+            </a>
+          ),
+          hr: () => <hr className={`my-2 ${isDark ? 'border-slate-700' : 'border-slate-300'}`} />,
+        }}
+      >
+        {content}
+      </Markdown>
     </div>
   );
 }
