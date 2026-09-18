@@ -1,4 +1,5 @@
 import { GoogleGenerativeAI, type Content } from '@google/generative-ai';
+import { getFile } from '../files';
 import type { MessageRecord } from '../messages';
 import type { SearchResult } from '../search';
 import { CHAT_REQUEST_TIMEOUT_MS, GEMINI_CHAT_MODEL, getGeminiApiKey } from './config';
@@ -6,10 +7,16 @@ import { CHAT_REQUEST_TIMEOUT_MS, GEMINI_CHAT_MODEL, getGeminiApiKey } from './c
 const SYSTEM_INSTRUCTION = `You are a patient, encouraging study tutor embedded in a collaborative whiteboard.
 Multiple students may be drawing and asking questions together.
 
+The retrieved sources are passages from uploaded course materials — typically lecture slides or readings. Treat them as the class's actual material.
+
 Rules:
 - If a "Board snapshot" image is provided, look at it — it is a picture of the group's current whiteboard.
 - If "Retrieved sources" are provided below, ground your answer in them and reference them by their [n] marker
   when you use them (e.g. "...as shown in [1]"). Only cite a source if you actually used it.
+- The filename next to a source (e.g. lecture1.pdf) identifies which uploaded file it came from. If the student asks about "Lecture 1" or a similarly named file, that file is the lecture.
+- When asked what a lecture, slide deck, or document is about, answer with the academic topic and main ideas (definitions, methods, examples). Lead with the subject, then outline the key points. Course logistics — exams, grading, schedules, office hours — are not the lecture topic unless the student asked about those specifically.
+- If some retrieved slides are administrative and others are content, ignore the administrative ones for a topic question. Do not say the material is missing just because an exam or grading slide was retrieved.
+- Answer the question directly from the sources you have. Do not ask the student to paste notes or a syllabus that are already in the retrieved sources.
 - If none of the retrieved sources are relevant to the question, say so plainly instead of guessing or citing them.
 - If no sources were retrieved at all, answer from general knowledge and say you have no uploaded material on the topic.
 - Be concise. Prefer short explanations and concrete examples over long lectures.`;
@@ -26,9 +33,10 @@ function buildSourcesBlock(retrieved: SearchResult[]): string {
   if (retrieved.length === 0) return 'Retrieved sources: none.';
   return [
     'Retrieved sources:',
-    ...retrieved.map(
-      (r, i) => `[${i + 1}] (page ${r.chunk.page}, relevance ${r.score.toFixed(2)}):\n${r.chunk.text}`,
-    ),
+    ...retrieved.map((r, i) => {
+      const filename = getFile(r.chunk.fileId)?.filename ?? 'uploaded file';
+      return `[${i + 1}] ${filename} (page ${r.chunk.page}):\n${r.chunk.text}`;
+    }),
   ].join('\n\n');
 }
 
