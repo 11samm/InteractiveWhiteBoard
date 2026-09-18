@@ -90,17 +90,29 @@ export function ChatPanel({ boardId, editor, theme, onClose }: ChatPanelProps) {
     const controller = new AbortController();
     abortRef.current = controller;
 
+    const startedAt = performance.now();
+    let timeToFirstTokenMs: number | undefined;
+
     await sendChatMessage(
       boardId,
       text,
       boardImage,
       {
         onToken: (chunk) => {
+          if (timeToFirstTokenMs === undefined) {
+            timeToFirstTokenMs = performance.now() - startedAt;
+          }
           setMessages((prev) =>
             prev.map((m) => (m.id === assistantId ? { ...m, content: m.content + chunk } : m)),
           );
         },
-        onDone: ({ messageId, citations }) => {
+        onDone: ({ messageId, citations, usage }) => {
+          console.info('[chat timing]', {
+            timeToFirstTokenMs: timeToFirstTokenMs !== undefined ? Math.round(timeToFirstTokenMs) : null,
+            totalMs: usage.latencyMs,
+            promptTokens: usage.promptTokens,
+            completionTokens: usage.completionTokens,
+          });
           setMessages((prev) =>
             prev.map((m) => (m.id === assistantId ? { ...m, id: messageId, citations, pending: false } : m)),
           );

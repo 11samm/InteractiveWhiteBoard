@@ -5,7 +5,7 @@ import path from 'node:path';
 import { serve } from '@hono/node-server';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { createNodeWebSocket } from '@hono/node-ws';
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import { cors } from 'hono/cors';
 import { streamSSE } from 'hono/streaming';
 import { hasGeminiApiKey } from './ai/config';
@@ -16,6 +16,7 @@ import { ingestFile } from './ingestion';
 import { listMessages } from './messages';
 import { getOrCreateRoom, persistAllRoomsNow } from './rooms';
 import { searchChunks } from './search';
+import { getPrimaryLanIPv4 } from './lan';
 import { getBoardUsageSummary } from './usage';
 
 const PORT = Number(process.env.PORT ?? 8787);
@@ -52,11 +53,8 @@ app.get('/api/boards/:id', (c) => {
 
 app.delete('/api/boards/:id', (c) => {
   const id = c.req.param('id');
-  const secret = c.req.header('x-admin-secret');
-  if (!isAdminSecretValid(id, secret)) {
-    // Sanitized error: never reveals whether the board exists vs. the secret was wrong.
-    return c.json({ error: 'forbidden' }, 403);
-  }
+  const forbidden = requireAdmin(c, id);
+  if (forbidden) return forbidden;
   deleteBoard(id);
   return c.json({ ok: true });
 });
@@ -64,7 +62,9 @@ app.delete('/api/boards/:id', (c) => {
 // Host configuration status only — never the key itself. Lets the UI explain
 // degraded behavior (keyword-only search, no AI chat) instead of failing
 // silently when the host hasn't set GEMINI_API_KEY yet (PLAN.md 5.2).
-app.get('/api/config', (c) => c.json({ aiConfigured: hasGeminiApiKey() }));
+app.get('/api/config', (c) =>
+  c.json({ aiConfigured: hasGeminiApiKey(), lanIPv4: getPrimaryLanIPv4() }),
+);
 
 // --- Documents (PLAN.md 4.5, Phase 3) ------------------------------------
 // PDF-only for the MVP; OCR for scanned documents is explicitly deferred
@@ -90,6 +90,13 @@ function toClientFile(file: FileRecord) {
 function sanitizeFilename(name: string): string {
   const base = name.replace(/[/\\]/g, '_').replace(/[^a-zA-Z0-9._-]/g, '_');
   return base.slice(-150) || 'file.pdf';
+}
+
+function requireAdmin(c: Context, boardId: string): Response | null {
+  if (!isAdminSecretValid(boardId, c.req.header('x-admin-secret'))) {
+    return c.json({ error: 'forbidden' }, 403);
+  }
+  return null;
 }
 
 app.get('/api/boards/:boardId/files', (c) => {
@@ -186,7 +193,10 @@ app.get('/api/boards/:boardId/messages', (c) => {
 });
 
 app.get('/api/boards/:boardId/usage', (c) => {
-  return c.json(getBoardUsageSummary(c.req.param('boardId')));
+  const boardId = c.req.param('boardId');
+  const forbidden = requireAdmin(c, boardId);
+  if (forbidden) return forbidden;
+  return c.json(getBoardUsageSummary(boardId));
 });
 
 app.post('/api/boards/:boardId/chat', async (c) => {

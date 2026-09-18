@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 import { createBoard as createBoardOnHost } from '../lib/api';
 import { setStoredName } from '../lib/userName';
 import { NamePrompt } from '../components/NamePrompt';
@@ -89,6 +89,9 @@ export default function HomePage() {
         <p className="mt-6 text-xs text-slate-500">
           Anyone with the board link can join and draw — the link itself is the guest token.
         </p>
+        <Link to="/host" className="mt-2 inline-block text-xs text-slate-500 hover:underline">
+          Host dashboard
+        </Link>
       </div>
     </div>
   );

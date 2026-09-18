@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { CHAT_BUDGET_USD_PER_BOARD } from './ai/config';
 import { db } from './db';
 
 export interface NewUsage {
@@ -17,6 +18,8 @@ export interface UsageSummary {
   totalCompletionTokens: number;
   totalEstimatedCostUsd: number;
   avgLatencyMs: number;
+  budgetUsd: number;
+  remainingUsd: number;
 }
 
 const insertUsageStmt = db.prepare<[string, string, string | null, string, number, number, number, number]>(
@@ -56,11 +59,15 @@ export function getBoardSpendUsd(boardId: string): number {
 /** Host-visible aggregate for the demo session (PLAN.md Phase 4 done-criteria). */
 export function getBoardUsageSummary(boardId: string): UsageSummary {
   const row = summaryStmt.get(boardId);
+  const totalEstimatedCostUsd = row?.cost ?? 0;
+  const budgetUsd = CHAT_BUDGET_USD_PER_BOARD;
   return {
     requestCount: row?.count ?? 0,
     totalPromptTokens: row?.prompt ?? 0,
     totalCompletionTokens: row?.completion ?? 0,
-    totalEstimatedCostUsd: row?.cost ?? 0,
+    totalEstimatedCostUsd,
     avgLatencyMs: row?.avgLatency ?? 0,
+    budgetUsd,
+    remainingUsd: Math.max(0, budgetUsd - totalEstimatedCostUsd),
   };
 }

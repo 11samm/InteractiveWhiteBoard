@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useParams } from 'react-router';
+import { Link, useParams } from 'react-router';
 import { useSync } from '@tldraw/sync';
 import { inlineBase64AssetStore, type Editor } from 'tldraw';
 import { AiTrigger } from '../components/AiTrigger';
@@ -9,7 +9,7 @@ import { UserAvatars } from '../components/UserAvatars';
 import { Board } from '../components/Board';
 import { NamePrompt } from '../components/NamePrompt';
 import { ZoomControl } from '../components/ZoomControl';
-import { getSyncUrl } from '../lib/api';
+import { getSyncUrl, isBoardAdmin } from '../lib/api';
 import { getStoredName, setStoredName } from '../lib/userName';
 
 export default function BoardPage() {
@@ -151,6 +151,17 @@ export default function BoardPage() {
         editor={editor}
         leftOffset={sidebarCollapsed ? 32 : 352}
       />
+
+      {isBoardAdmin(boardId) && (
+        <Link
+          to={`/host/${boardId}`}
+          className="fixed bottom-36 right-8 z-40 bg-slate-900/80 border border-white/20 text-sm text-white rounded-full px-3 py-1.5 hover:bg-slate-800/90 transition-colors focus:outline-none focus:ring-2 focus:ring-cyan-500"
+          aria-label="Open host dashboard"
+          title="Host dashboard"
+        >
+          Host dashboard
+        </Link>
+      )}
 
       {/* Bottom Right - Ask AI (tldraw's own toolbar owns bottom-center) */}
       <AiTrigger onAskAi={() => setChatOpen((v) => !v)} isOpen={chatOpen} />

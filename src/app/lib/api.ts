@@ -60,10 +60,25 @@ export function getSyncUrl(boardId: string): string {
 
 // --- Host configuration status --------------------------------------------
 
-export async function getConfigStatus(): Promise<{ aiConfigured: boolean }> {
+export interface HostConfigStatus {
+  aiConfigured: boolean;
+  lanIPv4: string | null;
+}
+
+export async function getConfigStatus(): Promise<HostConfigStatus> {
   const res = await fetch('/api/config');
-  if (!res.ok) return { aiConfigured: false };
-  return (await res.json()) as { aiConfigured: boolean };
+  if (!res.ok) return { aiConfigured: false, lanIPv4: null };
+  return (await res.json()) as HostConfigStatus;
+}
+
+/** Origin guests on the same Wi-Fi should use (LAN IP when the host UI is on localhost). */
+export function buildGuestJoinOrigin(lanIPv4: string | null): string {
+  const { protocol, hostname, port } = window.location;
+  const portPart = port ? `:${port}` : '';
+  const useLan =
+    lanIPv4 && (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '[::1]');
+  const host = useLan ? lanIPv4 : hostname;
+  return `${protocol}//${host}${portPart}`;
 }
 
 // --- Documents (Phase 3) ---------------------------------------------------
@@ -147,6 +162,8 @@ export interface UsageSummaryDto {
   totalCompletionTokens: number;
   totalEstimatedCostUsd: number;
   avgLatencyMs: number;
+  budgetUsd: number;
+  remainingUsd: number;
 }
 
 export async function getBoardMessages(boardId: string): Promise<MessageDto[]> {
@@ -156,9 +173,27 @@ export async function getBoardMessages(boardId: string): Promise<MessageDto[]> {
 }
 
 export async function getBoardUsage(boardId: string): Promise<UsageSummaryDto> {
-  const res = await fetch(`/api/boards/${encodeURIComponent(boardId)}/usage`);
+  const secret = getStoredAdminSecret(boardId);
+  const res = await fetch(`/api/boards/${encodeURIComponent(boardId)}/usage`, {
+    headers: secret ? { 'x-admin-secret': secret } : undefined,
+  });
+  if (res.status === 403) throw new Error('forbidden');
   if (!res.ok) throw new Error(`Failed to load usage (${res.status})`);
   return (await res.json()) as UsageSummaryDto;
+}
+
+export function listKnownAdminBoardIds(): string[] {
+  const prefix = 'whiteboard:admin-secret:';
+  const ids: string[] = [];
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key?.startsWith(prefix)) ids.push(key.slice(prefix.length));
+    }
+  } catch {
+    // private mode / blocked storage
+  }
+  return ids;
 }
 
 interface ChatStreamHandlers {

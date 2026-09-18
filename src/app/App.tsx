@@ -9,7 +9,7 @@ export default function App() {
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/board/:boardId" element={<BoardPage />} />
-        <Route path="/host" element={<HostSetupPage />} />
+        <Route path="/host/:boardId?" element={<HostSetupPage />} />
       </Routes>
     </BrowserRouter>
   );
