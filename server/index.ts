@@ -253,7 +253,7 @@ if (isProduction) {
   app.get('*', serveStatic({ path: path.join(distDir, 'index.html') }));
 }
 
-const server = serve({ fetch: app.fetch, port: PORT }, (info) => {
+const server = serve({ fetch: app.fetch, port: PORT, hostname: '0.0.0.0' }, (info) => {
   console.log(`\nWhiteboard host listening on http://localhost:${info.port}`);
   console.log('Guests on the same network can join with a board link; no provider keys are ever sent to them.\n');
 });

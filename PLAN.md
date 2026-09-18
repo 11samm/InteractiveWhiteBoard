@@ -35,29 +35,11 @@ These features are extensions and do not block applications:
 
 ## 3. Current state
 
-The repository begins as a Figma Make UI export on React 18, Vite 6, and Tailwind 4.
+Phases 0–4 are implemented. The app has a tldraw board, authoritative WebSocket rooms with SQLite snapshots, shared PDF ingestion and retrieval, and a streaming tutor with board-image context and page citations. The host dashboard shows a LAN join link and usage. See `HANDOFF.md` for the code map and `docs/evaluation.md` for measured results.
 
-Working:
+Phase 5 is in progress. The dev client and API now listen on the LAN. A same-machine request to the LAN IPv4 verified page loading, API proxying, board creation, and the sync WebSocket upgrade. The user also confirmed that the host dashboard's guest link opened and worked on a second physical device. The full two-device demo, README, narrated clip, and remaining reliability checks are still pending.
 
-- Freehand drawing on a raw `<canvas>`
-- Light/dark theme and grid toggle
-- Collapsible study-context sidebar
-
-Mocked or incomplete:
-
-- Shape and text tools
-- Canvas zoom
-- Collaborator presence
-- File upload and parsing
-- AI chat and voice
-- Backend, persistence, authorization, and routing
-
-Address structural debt when related files are changed instead of running a separate redesign phase:
-
-- Remove unused UI components as features are rebuilt.
-- Replace repeated theme ternaries with semantic CSS tokens in edited components.
-- Preserve a focused version of the dark, floating visual identity.
-- Add accessible names, focus states, contrast, and reduced-motion support to completed surfaces.
+Keep the dark, floating visual identity and address accessibility or structural debt when touching related components. Do not begin Phase 6 before the Phase 5 demonstration and recruiting package are complete.
 
 ## 4. Architecture
 

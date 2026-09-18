@@ -21,6 +21,9 @@ export default defineConfig({
   assetsInclude: ['**/*.svg', '**/*.csv'],
 
   server: {
+    // The host shares the dev client with other devices on the same LAN.
+    // Vite still proxies API and sync requests to the Node process below.
+    host: '0.0.0.0',
     proxy: {
       // The host process (server/index.ts) serves the API and the sync
       // websocket. In dev they run as separate processes, so Vite proxies

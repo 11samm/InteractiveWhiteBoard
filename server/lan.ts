@@ -1,4 +1,5 @@
 import os from 'node:os';
+import { isIP } from 'node:net';
 
 function isPrivateIPv4(address: string): boolean {
   if (address.startsWith('192.168.')) return true;
@@ -8,6 +9,11 @@ function isPrivateIPv4(address: string): boolean {
 
 /** First suitable LAN IPv4 for guest join links (not loopback). */
 export function getPrimaryLanIPv4(): string | null {
+  // Machines with a VPN or multiple adapters can choose the wrong address.
+  // The host can set LAN_IPV4 to the address reachable by guests.
+  const override = process.env.LAN_IPV4?.trim();
+  if (override && isIP(override) === 4 && !override.startsWith('127.')) return override;
+
   const candidates: string[] = [];
   for (const addrs of Object.values(os.networkInterfaces())) {
     if (!addrs) continue;

@@ -184,8 +184,8 @@ export default function HostSetupPage() {
             {lanIPv4 !== null && window.location.hostname === 'localhost' && (
               <>
                 {' '}
-                If the phone cannot connect, run the dev client with <code className="text-slate-400">vite --host</code>{' '}
-                and allow inbound firewall access on port {window.location.port || '5173'}.
+                If the phone cannot connect, allow inbound access to port {window.location.port || '5173'} in the host firewall.
+                If the link uses a VPN address, set <code className="text-slate-400">LAN_IPV4</code> to your Wi-Fi IPv4 and restart the host.
               </>
             )}
           </p>

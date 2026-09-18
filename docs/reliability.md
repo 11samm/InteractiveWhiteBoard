@@ -20,3 +20,9 @@ Notes: Two-tab same-profile run; guest behavior simulated by clearing `whiteboar
 - R7 host usage numbers: **Pass** — After three completed chats, dashboard showed `aiConfigured`, request count 3, spend/budget/remaining consistent; guest `fetch` without secret got 403.
 
 Issues found: None blocking; R4 and oversized/scanned cases deferred as Skipped.
+
+## LAN smoke check (2026-09-17)
+
+After binding Vite and the API host to `0.0.0.0`, `npm run dev` advertised `http://192.168.10.132:5173/`. From the host machine, requests to that LAN IPv4 returned the app (HTTP 200) and `/api/health` (`ok: true`). A board was created through the Vite proxy, and a WebSocket connection to `/api/sync/:boardId` reached `Open`. `/api/config` returned `lanIPv4: 192.168.10.132`.
+
+Follow-up: the host dashboard link opened on a second physical device, and the user reported that it worked. The device/browser, two-way edits and presence, and reconnect behavior were not recorded separately, so the full two-device workflow remains to be documented for the narrated demo.

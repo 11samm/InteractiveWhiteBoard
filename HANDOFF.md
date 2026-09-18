@@ -2,10 +2,11 @@
 
 **Date:** 2026-09-17  
 **Repo:** https://github.com/11samm/InteractiveWhiteBoard  
-**Branch:** `main` at `a9305fa` (`host dashboard plus reliable. URGENT: ip based connecting easy`)  
-**Working tree:** clean except this file (commit it before switching machines)
+**Starting commit for this follow-up:** `c220a44` (`HandOffDocumentation`)
 
-This is a resume/portfolio project: a LAN-collaborative study whiteboard. Students draw together, upload course PDFs, and ask a host-funded AI tutor about both the live board and the documents. The product vision, phases, and out-of-scope list live in [`PLAN.md`](PLAN.md). **Section 3 of `PLAN.md` (“Current state”) is stale** — it still describes the original Figma canvas mock. Trust the code and this document instead.
+**Current work:** LAN join changes and CI are in the working tree; check `git status` before switching machines.
+
+This is a resume/portfolio project: a LAN-collaborative study whiteboard. Students draw together, upload course PDFs, and ask a host-funded AI tutor about both the live board and the documents. The product vision, phases, and out-of-scope list live in [`PLAN.md`](PLAN.md).
 
 ---
 
@@ -19,11 +20,12 @@ This is a resume/portfolio project: a LAN-collaborative study whiteboard. Studen
 | 3 | PDF ingest, chunking, embeddings, retrieval eval | Done |
 | 4 | Grounded streaming tutor + citations + limits | Done |
 | 5 items 1–3 | Host dashboard, reliability checklist, measurements | Done (localhost two-tab) |
-| **5 remaining** | **Easy LAN/IP guest join, two-device demo, README, CI, narrated clip** | **Next work** |
+| 5 LAN join + CI | Dev LAN bind, URL parsing, local LAN smoke check, GitHub Actions | Implemented; user confirmed the guest link works on a second device |
+| **5 remaining** | **Full two-device demo, README, narrated clip, remaining reliability checks** | **Next work** |
 | 6 | AI board annotations | Explicitly deferred — do not start before Phase 5 is recruiter-ready |
 | 7 | Voice, OCR, public hosting, extra providers | Out of scope for the portfolio release |
 
-The last commit message is the current priority: **make joining from another device by IP easy**. The dashboard already copies a LAN-IP URL, but `npm run dev` still binds Vite to localhost, so a phone on the same Wi-Fi cannot load that link without extra flags and firewall holes.
+The dashboard's LAN-IP link has opened successfully on a second physical device. `npm run dev` binds Vite and the API host to `0.0.0.0`. The next priority is to document the complete two-device workflow and finish the recruiting package.
 
 ---
 
@@ -62,7 +64,7 @@ Display names use `wb:name:<boardId>` in `localStorage`.
 
 ## 3. Setup on the other PC
 
-This machine used **Node v24.14.0** and **npm 11.9.0**. `better-sqlite3` is a native addon; `npm i` must compile it for that Node version.
+The original machine used **Node v24.14.0** and **npm 11.9.0**. `better-sqlite3` is a native addon. On this Windows machine, Node v24.15.0 lacked a matching prebuilt addon and source compilation needed a Windows SDK; Node v22.23.2 successfully installed a prebuilt addon.
 
 ```powershell
 git clone https://github.com/11samm/InteractiveWhiteBoard.git
@@ -85,7 +87,7 @@ Useful scripts:
 | `npm start` | Host only (`tsx server/index.ts`). In `NODE_ENV=production` it also serves `dist/` |
 | `npm run eval:retrieval` | Ingests `eval/Linear_Algebra_Ch3.pdf`, scores `eval/questions.json` |
 
-If `better-sqlite3` fails to build, install Windows build tools / a matching Node LTS and rerun `npm i`. Do not check `node_modules` into git.
+If `better-sqlite3` fails to build, use a Node LTS with a matching prebuilt addon or install Visual Studio C++ tools with the Windows SDK, then rerun `npm i`. Do not check `node_modules` into git.
 
 Restart the host after any `.env` change (`process.loadEnvFile` runs at process start).
 
@@ -194,36 +196,20 @@ Chat timing is logged in the browser console as `[chat timing]` (TTFB + server `
 
 ## 7. Next work (do this in order)
 
-### P0 — Easy IP/LAN join (the URGENT item)
+### P0 — IP/LAN join verified
 
-Goal: host copies a link, guest on another device on the same Wi-Fi opens it and draws. No manual `ipconfig` or `localhost` swap.
+Implemented: Vite and the API host listen on `0.0.0.0`; Vite prints a Network URL; the dashboard copies an IPv4 link and notes firewall/adapter issues; the home join field accepts a full board URL; `LAN_IPV4` can override the detected adapter. The dev client still proxies `/api` and the sync WebSocket to the Node host.
 
-Current gaps:
+Local smoke check on 2026-09-17: Vite advertised `http://192.168.10.132:5173/`. A request to that address returned the app (HTTP 200), `/api/health` returned `{ ok: true }`, creating a board through that address succeeded, and a WebSocket connection to `/api/sync/:boardId` reached `Open`. This proves the bind and local proxy path, **not** cross-device connectivity.
 
-1. **Vite is localhost-only.** `vite.config.ts` has no `server.host`. `npm run dev` does not listen on `0.0.0.0`. Dashboard already tells the user to run `vite --host`.
-2. **Windows Firewall** will block inbound 5173 (and 8787 if you expose the API directly).
-3. **Home join field is naive.** Pasting `http://192.168.x.x:5173/board/<uuid>` navigates to `/board/http://...` because `HomePage` uses the raw string as the id. Guests should open the copied URL directly; if they paste it on `/`, parse pathname `/board/:id` (and ignore origin).
-4. **Dev is two processes.** Guests must reach Vite (5173), which then proxies `/api` to 8787. Binding only the Node server is not enough in `npm run dev`. Production (`vite build` + `NODE_ENV=production npm start`) is one process on 8787 — often easier for a two-device demo if that process listens on `0.0.0.0`.
-5. **Some campus/dorm APs isolate clients.** Same-machine two-browser remains the fallback (already proven). Document that in the README when you write it.
-6. **LAN detector** (`server/lan.ts`) picks the first private IPv4. VPNs / extra adapters can pick the wrong NIC.
-
-Suggested implementation (keep it small):
-
-- Set Vite `server.host: true` (or `0.0.0.0`) and print the Network URL from `npm run dev`.
-- Confirm Hono `serve()` hostname is `0.0.0.0` (not loopback).
-- Make `npm run dev` the one command that is LAN-reachable.
-- Parse pasted join URLs on the home page.
-- Optional: a short “Windows Firewall: allow Node and Vite” note on the host dashboard (already partially there).
-- Verify with a phone or second laptop. That is the resume-ready two-device clip.
-
-Do not add HTTPS/voice to “fix” LAN. Plain HTTP on LAN is expected; microphone APIs will not work for guests (PLAN.md 5.4).
+The user subsequently opened the copied dashboard link on a second physical device and reported that it worked. The device/browser and two-way edits, presence, and reconnect steps were not separately recorded; capture those with the final demo. Plain HTTP is expected for this LAN demo; voice remains deferred.
 
 ### P1 — Finish Phase 5 recruiting package
 
 Only after LAN join works (or is honestly documented as blocked by AP isolation):
 
 1. Replace `README.md` with: one-sentence product, demo, three capabilities, architecture, measured results, local setup, trust model, limitations, tldraw attribution. Lead with evidence, not the roadmap.
-2. GitHub Actions: `npm run typecheck` and `npm run build` (and retrieval eval if a key can be supplied as a secret; otherwise skip eval in CI).
+2. GitHub Actions for `npm run typecheck` and `npm run build` is added in `.github/workflows/ci.yml`; check the first remote run after pushing. Retrieval eval is omitted because CI has no provider key.
 3. Record a 60–90s narrated demo: two devices, PDF upload, grounded answer with a page citation.
 4. Fill remaining reliability rows if easy: R4 (true WS drop), oversized PDF, one-page scanned PDF. Do not invent Pass/Fail.
 
@@ -233,7 +219,7 @@ Only after LAN join works (or is honestly documented as blocked by AP isolation)
 - Citations shown are **all retrieved chunks**, not only ones the model marked `[n]`. PLAN.md allows “chunk was in the request”; a PDF page viewer is explicitly out of scope.
 - Chat history is per board, not live-synced across tabs except on reload (`GET /api/boards/:id/messages`).
 - `inlineBase64AssetStore` for pasted images — fine for demo, not a real asset host.
-- `PLAN.md` §3 should be updated or deleted so it does not contradict the README.
+- `PLAN.md` §3 has been updated to reflect the implemented app.
 
 ### Do not do yet
 
@@ -291,9 +277,9 @@ GET    /api/health
 
 Paste this:
 
-> Read HANDOFF.md and PLAN.md. We are at Phase 5. Phases 0–4 and Phase 5 items 1–3 are done. Next is P0: make LAN/IP guest join work from `npm run dev` without manual localhost replacement (Vite host bind, firewall/docs, parse pasted join URLs). Do not start Phase 6. Do not rewrite the README until a second device can join or we document why the AP blocks it.
+> Read HANDOFF.md and PLAN.md. We are at Phase 5. The LAN bind, join URL parsing, and CI are implemented; the user confirmed that the copied dashboard link works on a second device. Next, document the full two-device workflow, replace the README, and record the narrated demo. Do not start Phase 6 or claim unrecorded reliability checks passed.
 
-Then implement P0 and verify on a real second device if one is available.
+Finish the Phase 5 package and record the full two-device demo.
 
 ---
 

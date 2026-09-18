@@ -4,6 +4,22 @@ import { createBoard as createBoardOnHost } from '../lib/api';
 import { setStoredName } from '../lib/userName';
 import { NamePrompt } from '../components/NamePrompt';
 
+const BOARD_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function boardIdFromInput(input: string): string | null {
+  const value = input.trim();
+  if (BOARD_ID_PATTERN.test(value)) return value;
+
+  try {
+    const url = new URL(value, window.location.origin);
+    const match = /^\/board\/([^/]+)\/?$/.exec(url.pathname);
+    const id = match ? decodeURIComponent(match[1]) : '';
+    return BOARD_ID_PATTERN.test(id) ? id : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Landing page. Boards are created on the host (`POST /api/boards`) so they
  * are shareable with other devices on the LAN and survive a host restart;
@@ -33,8 +49,13 @@ export default function HomePage() {
 
   const joinBoard = (e: React.FormEvent) => {
     e.preventDefault();
-    const trimmed = joinId.trim();
-    if (trimmed) navigate(`/board/${trimmed}`);
+    const id = boardIdFromInput(joinId);
+    if (id) {
+      setError(null);
+      navigate(`/board/${id}`);
+    } else {
+      setError('Paste a board link or a valid board ID.');
+    }
   };
 
   if (isNamingHost) {
